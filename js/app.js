@@ -484,6 +484,9 @@ document.querySelectorAll('[data-fade]').forEach(function (box) {
     timer = setInterval(function () { if (seen && !document.hidden) show(cur + 1); }, 4000);
   }
   dots.forEach(function (d) { d.addEventListener('click', function () { show(+d.dataset.fadeDot); play(); }); });
+  var prev = box.querySelector('[data-fade-prev]'), next = box.querySelector('[data-fade-next]'); // стрелки
+  if (prev) prev.addEventListener('click', function () { show(cur - 1); play(); });
+  if (next) next.addEventListener('click', function () { show(cur + 1); play(); });
   new IntersectionObserver(function (e) { seen = e[0].isIntersecting; }).observe(box);
   play();
 });
