@@ -563,8 +563,85 @@ document.querySelectorAll('[data-shots]').forEach(function (box) {
     }
   }
   box._go = go;
+  box._cur = function () { return cur; };
+  // телефон/планшет: нажатие на фото (не на кнопки) — галерея кейса на весь экран
+  // свайп по фото влево/вправо — следующий/предыдущий снимок (без открытия галереи)
+  var sx = null, sy = 0, swiped = false;
+  box.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; swiped = false; }, { passive: true });
+  box.addEventListener('touchend', function (e) {
+    if (sx === null) return;
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy)) { swiped = true; go(cur + (dx < 0 ? 1 : -1)); }
+  }, { passive: true });
+  box.addEventListener('click', function (e) {
+    if (swiped) { swiped = false; return; } // это был свайп, а не нажатие
+    if (!window.matchMedia('(max-width: 999px)').matches || e.target.closest('button')) return;
+    openLightbox(box, cur, function (n) { go(n); });
+  });
   minis.forEach(function (m) { m.addEventListener('click', function () { go(+m.dataset.shot); }); });
   var p = box.querySelector('[data-shot-prev]'), n = box.querySelector('[data-shot-next]');
-  if (p) p.addEventListener('click', function () { go(cur - 1); });
-  if (n) n.addEventListener('click', function () { go(cur + 1); });
+  if (p) p.addEventListener('click', function (e) { e.stopPropagation(); go(cur - 1); });
+  if (n) n.addEventListener('click', function (e) { e.stopPropagation(); go(cur + 1); });
 });
+
+/* --- галерея кейса на весь экран (телефон/планшет): открывается нажатием на фото в кадре кейса.
+   Снимки — те же, что в кадре ([data-shot-i] → img), берём самый крупный вариант из srcset.
+   Листание: стрелки, свайп влево/вправо, клавиши ←/→; закрыть — крестик, Esc, «назад» по свайпу вниз.
+   <dialog> + showModal: фокус внутри, фон не прокручивается --- */
+var openLightbox = (function () {
+  var dlg, img, lbl, cnt, items = [], cur = 0, onGo;
+  function big(im) {
+    var best = im.currentSrc || im.src, w = 0;
+    (im.getAttribute('srcset') || '').split(',').forEach(function (s) {
+      var p = s.trim().split(/\s+/), v = parseInt(p[1], 10) || 0;
+      if (p[0] && v > w) { w = v; best = p[0]; }
+    });
+    return best;
+  }
+  function show(n) {
+    cur = (n + items.length) % items.length;
+    var it = items[cur];
+    img.src = it.src; img.alt = it.alt;
+    lbl.textContent = it.label; cnt.textContent = (cur + 1) + ' / ' + items.length;
+    if (onGo) onGo(cur); // кадр на странице синхронно с галереей
+  }
+  function build() {
+    dlg = document.createElement('dialog');
+    dlg.className = 'lb';
+    dlg.setAttribute('aria-label', 'Фото кейса');
+    dlg.innerHTML = '<div class="lb__top"><span class="lb__lbl"></span><span class="lb__cnt"></span>' +
+      '<button type="button" class="lb__x" aria-label="Закрыть">×</button></div>' +
+      '<img class="lb__img" alt="" decoding="async">' +
+      '<button type="button" class="lb__nav lb__nav--l" aria-label="Предыдущее фото">‹</button>' +
+      '<button type="button" class="lb__nav lb__nav--r" aria-label="Следующее фото">›</button>';
+    document.body.appendChild(dlg);
+    img = dlg.querySelector('.lb__img'); lbl = dlg.querySelector('.lb__lbl'); cnt = dlg.querySelector('.lb__cnt');
+    dlg.querySelector('.lb__x').addEventListener('click', function () { dlg.close(); });
+    dlg.querySelector('.lb__nav--l').addEventListener('click', function () { show(cur - 1); });
+    dlg.querySelector('.lb__nav--r').addEventListener('click', function () { show(cur + 1); });
+    dlg.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') show(cur - 1);
+      if (e.key === 'ArrowRight') show(cur + 1);
+    });
+    var x0 = null, y0 = 0;
+    dlg.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    dlg.addEventListener('touchend', function (e) {
+      if (x0 === null) return;
+      var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) show(cur + (dx < 0 ? 1 : -1));
+      else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) dlg.close(); // свайп вниз — закрыть
+    });
+    dlg.addEventListener('close', function () { document.documentElement.classList.remove('lb-open'); });
+  }
+  return function (box, start, go) {
+    if (!dlg) build();
+    items = [].map.call(box.querySelectorAll('[data-shot-i]'), function (s) {
+      var im = s.querySelector('img'), cap = s.querySelector('figcaption');
+      return { src: big(im), alt: im.alt, label: cap ? cap.textContent : '' };
+    });
+    onGo = go;
+    show(start);
+    document.documentElement.classList.add('lb-open');
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  };
+})();
