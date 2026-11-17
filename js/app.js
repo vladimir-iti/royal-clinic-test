@@ -586,7 +586,7 @@ document.querySelectorAll('[data-shots]').forEach(function (box) {
 
 /* --- галерея кейса на весь экран (телефон/планшет): открывается нажатием на фото в кадре кейса.
    Снимки — те же, что в кадре ([data-shot-i] → img), берём самый крупный вариант из srcset.
-   Листание: стрелки, свайп влево/вправо, клавиши ←/→; закрыть — крестик, Esc, «назад» по свайпу вниз.
+   Листание: стрелки, свайп влево/вправо, клавиши ←/→; закрыть — крестик, нажатие мимо фото, Esc, свайп вниз.
    <dialog> + showModal: фокус внутри, фон не прокручивается --- */
 var openLightbox = (function () {
   var dlg, img, lbl, cnt, items = [], cur = 0, onGo;
@@ -623,13 +623,18 @@ var openLightbox = (function () {
       if (e.key === 'ArrowLeft') show(cur - 1);
       if (e.key === 'ArrowRight') show(cur + 1);
     });
-    var x0 = null, y0 = 0;
-    dlg.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    var x0 = null, y0 = 0, moved = false;
+    dlg.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; moved = false; }, { passive: true });
     dlg.addEventListener('touchend', function (e) {
       if (x0 === null) return;
       var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) show(cur + (dx < 0 ? 1 : -1));
-      else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) dlg.close(); // свайп вниз — закрыть
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { moved = true; show(cur + (dx < 0 ? 1 : -1)); }
+      else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) { moved = true; dlg.close(); } // свайп вниз — закрыть
+    });
+    // нажатие мимо фото (по чёрному полю или пустой верхней полосе) — закрыть; по фото и кнопкам — нет
+    dlg.addEventListener('click', function (e) {
+      if (moved) { moved = false; return; }
+      if (!e.target.closest('.lb__img, button')) dlg.close();
     });
     dlg.addEventListener('close', function () { document.documentElement.classList.remove('lb-open'); });
   }
