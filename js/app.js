@@ -630,7 +630,9 @@ var openLightbox = (function () {
       var dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
       if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { moved = true; show(cur + (dx < 0 ? 1 : -1)); }
       else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) { moved = true; dlg.close(); } // свайп вниз — закрыть
-    });
+      // Safari на iPhone не всегда присылает click по «пустому» месту — закрываем уже по касанию
+      else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && !e.target.closest('.lb__img, button')) { moved = true; e.preventDefault(); dlg.close(); }
+    }, { passive: false });
     // нажатие мимо фото (по чёрному полю или пустой верхней полосе) — закрыть; по фото и кнопкам — нет
     dlg.addEventListener('click', function (e) {
       if (moved) { moved = false; return; }
