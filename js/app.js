@@ -75,7 +75,7 @@ var utm = (function () {
   // середину экрана; если там блок не из меню («Кому подойдёт», «Сравнение»…) — ни один
   var links = hd.querySelectorAll('[data-spy]');
   var spy = [];
-  // только якоря этой страницы (#раздел); ссылки на другие страницы (/raboty/, /#cena) не подсвечиваем
+  // только якоря этой страницы (#раздел); ссылки на другие страницы (/royal-clinic-test/raboty/, /#cena) не подсвечиваем
   links.forEach(function (a) { var s = a.dataset.spy || ''; if (s.charAt(0) !== '#') return; var t = document.querySelector(s); if (t) spy.push({ a: a, t: t }); });
   if (spy.length) {
     var ticking = false;
@@ -651,4 +651,27 @@ var openLightbox = (function () {
     document.documentElement.classList.add('lb-open');
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   };
+})();
+
+/* --- «Наши работы» (/royal-clinic-test/raboty/): фильтр по виду лечения. Кнопки [data-cat] в [data-works-filter],
+   карточки — li[data-cats] в [data-works-list]. ?vid=<вид> в адресе — сразу выбранный вид
+   (ссылка из хлебных крошек кейса); выбор пишется в адрес без перезагрузки --- */
+(function () {
+  var bar = document.querySelector('[data-works-filter]'), list = document.querySelector('[data-works-list]');
+  if (!bar || !list) return;
+  var btns = bar.querySelectorAll('[data-cat]'), items = list.querySelectorAll('li[data-cats]');
+  function pick(cat) {
+    btns.forEach(function (b) { var on = b.dataset.cat === cat; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    items.forEach(function (li) { li.hidden = !!cat && li.dataset.cats.split(' ').indexOf(cat) < 0; });
+  }
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      pick(b.dataset.cat);
+      var u = new URL(location.href);
+      if (b.dataset.cat) u.searchParams.set('vid', b.dataset.cat); else u.searchParams.delete('vid');
+      history.replaceState(null, '', u);
+    });
+  });
+  var q = new URLSearchParams(location.search).get('vid');
+  if (q && bar.querySelector('[data-cat="' + q + '"]')) pick(q);
 })();
