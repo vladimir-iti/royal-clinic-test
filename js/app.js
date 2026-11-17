@@ -75,7 +75,8 @@ var utm = (function () {
   // середину экрана; если там блок не из меню («Кому подойдёт», «Сравнение»…) — ни один
   var links = hd.querySelectorAll('[data-spy]');
   var spy = [];
-  links.forEach(function (a) { var t = document.querySelector(a.dataset.spy); if (t) spy.push({ a: a, t: t }); });
+  // только якоря этой страницы (#раздел); ссылки на другие страницы (/raboty/, /#cena) не подсвечиваем
+  links.forEach(function (a) { var s = a.dataset.spy || ''; if (s.charAt(0) !== '#') return; var t = document.querySelector(s); if (t) spy.push({ a: a, t: t }); });
   if (spy.length) {
     var ticking = false;
     var mark = function () {
@@ -114,7 +115,19 @@ var utm = (function () {
   var bar = document.querySelector('[data-stickybar]');
   if (!bar) return;
   var typing = false;
-  function on() { bar.classList.toggle('is-in', window.scrollY > 480 && !typing); }
+  // «Написать» — плашка с выбором мессенджера над меню
+  var mbtn = bar.querySelector('[data-sb-msg-btn]'), mbox = bar.querySelector('[data-sb-msg]');
+  function msg(open) { if (!mbox) return; mbox.hidden = !open; mbtn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+  if (mbtn) {
+    mbtn.addEventListener('click', function (e) { e.stopPropagation(); msg(mbox.hidden); });
+    document.addEventListener('click', function (e) { if (!mbox.hidden && !mbox.contains(e.target)) msg(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') msg(false); });
+  }
+  function on() {
+    var show = window.scrollY > 480 && !typing;
+    bar.classList.toggle('is-in', show);
+    if (!show) msg(false);
+  }
   window.addEventListener('scroll', on, { passive: true });
   document.addEventListener('focusin', function (e) {
     if (e.target.matches('input:not([type=checkbox]):not([type=radio]), textarea')) { typing = true; on(); }
@@ -390,82 +403,6 @@ document.querySelectorAll('[data-hero-slides]').forEach(function (box) {
   play();
 });
 
-/* --- скрытые впечатляющие фото (ui/PhotoVeil.astro): размытие + искорки как у спойлера в Telegram.
-   Модель частиц — как в Telegram Android (SpoilerEffect.java): каждая летит по прямой в случайную
-   сторону со скоростью 8–20 px/с, живёт 1–3 с, яркость постоянная (0.3 / 0.6 / 1), отжившая или
-   вылетевшая за край сразу появляется в новом случайном месте; 30 кадров/с. Цвет — золото логотипа.
-   Чтобы не грузить процессор: не больше MAX искорок на фото, данные в типизированных массивах,
-   рисуем пачками (9 групп цвет × яркость) квадратиками fillRect — в размере ~1 px не отличить от кружка.
-   Клик — открыть (искорки гаснут), следующий — скрыть. Рисуем только пока фото скрыто и видно;
-   при prefers-reduced-motion — один неподвижный кадр --- */
-document.querySelectorAll('[data-veil-btn]').forEach(function (b) {
-  var box = b.closest('[data-veil]');
-  var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var COLORS = ['#e9cf9f', '#f6e3bf', '#d9b77f'];
-  var ALPHAS = [0.3, 0.6, 1];
-  var MAX = 2500, FRAME = 1000 / 30;
-  var layers = [].map.call(box.querySelectorAll('figure'), function (fig) {
-    var c = document.createElement('canvas');
-    c.className = 'veil__dust';
-    c.setAttribute('aria-hidden', 'true');
-    fig.appendChild(c);
-    return { c: c, ctx: c.getContext('2d'), n: 0, w: 0, h: 0 };
-  });
-  function spawn(l, i) {
-    var a = Math.random() * 6.2832, v = 8 + Math.random() * 12;
-    l.x[i] = Math.random() * l.w; l.y[i] = Math.random() * l.h;
-    l.vx[i] = Math.cos(a) * v / 1000; l.vy[i] = Math.sin(a) * v / 1000; // px/мс
-    l.life[i] = 1000 + Math.random() * 2000; l.age[i] = 0;
-    l.g[i] = Math.floor(Math.random() * 9); // группа: цвет × яркость
-  }
-  function setup() {
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    layers.forEach(function (l) {
-      l.w = l.c.clientWidth; l.h = l.c.clientHeight;
-      l.c.width = l.w * dpr; l.c.height = l.h * dpr; l.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      var n = l.n = Math.min(MAX, Math.round(l.w * l.h / 9));
-      l.x = new Float32Array(n); l.y = new Float32Array(n); l.vx = new Float32Array(n); l.vy = new Float32Array(n);
-      l.life = new Float32Array(n); l.age = new Float32Array(n); l.g = new Uint8Array(n);
-      for (var i = 0; i < n; i++) { spawn(l, i); l.age[i] = Math.random() * l.life[i]; }
-    });
-  }
-  function step(dt) {
-    layers.forEach(function (l) {
-      var ctx = l.ctx, n = l.n, i;
-      for (i = 0; i < n; i++) {
-        l.age[i] += dt; l.x[i] += l.vx[i] * dt; l.y[i] += l.vy[i] * dt;
-        if (l.age[i] >= l.life[i] || l.x[i] < 0 || l.x[i] > l.w || l.y[i] < 0 || l.y[i] > l.h) spawn(l, i);
-      }
-      ctx.clearRect(0, 0, l.w, l.h);
-      for (var g = 0; g < 9; g++) {
-        var k = g % 3, s = k ? 1.2 : 1.4; // как в Telegram: тусклые чуть крупнее
-        ctx.fillStyle = COLORS[(g / 3) | 0]; ctx.globalAlpha = ALPHAS[k];
-        for (i = 0; i < n; i++) if (l.g[i] === g) ctx.fillRect(l.x[i], l.y[i], s, s);
-      }
-    });
-  }
-  var visible = false, raf = 0, last = 0, acc = 0;
-  function loop(t) {
-    var dt = last ? t - last : 0; last = t; acc += dt;
-    if (!dt || acc >= FRAME) { step(Math.min(acc, 34)); acc = 0; } // 30 кадров/с, шаг не больше 34 мс
-    raf = visible && !box.classList.contains('is-open') && !still ? requestAnimationFrame(loop) : (last = 0);
-  }
-  function kick() {
-    // секция могла быть не отрисована (content-visibility) — тогда размеры появятся только сейчас
-    if (!layers[0].w || layers[0].w !== layers[0].c.clientWidth) setup();
-    if (!raf) raf = requestAnimationFrame(loop);
-  }
-  setup(); step(0);
-  new IntersectionObserver(function (e) { visible = e[0].isIntersecting; if (visible) kick(); }).observe(box);
-  window.addEventListener('resize', function () { setup(); step(0); });
-  b.addEventListener('click', function () {
-    var open = box.classList.toggle('is-open');
-    b.setAttribute('aria-pressed', open ? 'true' : 'false');
-    b.setAttribute('aria-label', open ? 'Скрыть фото клинического случая' : 'Показать фото клинического случая');
-    if (!open) kick();
-  });
-});
-
 /* --- смена кадров по кругу (главная, «Кабинеты и оборудование»): каждые 4 с, только когда блок
    на экране и вкладка открыта; точки [data-fade-dot] переключают вручную и сбрасывают таймер;
    при prefers-reduced-motion — без автосмены, только по точкам --- */
@@ -505,13 +442,16 @@ document.querySelectorAll('[data-map]').forEach(function (m) {
 document.querySelectorAll('[data-cases]').forEach(function (box) {
   var panes = box.querySelectorAll('[data-case-pane]'), orig = [].slice.call(box.querySelectorAll('[data-case-tab]'));
   var num = box.querySelector('[data-case-num]'), cur = 0, n = panes.length;
+  var dots = box.querySelectorAll('[data-case-dot]');
   // Лента миниатюр бесконечная: за последней снова идёт первая, перед первой — последняя.
   // Лента = копии | оригиналы | копии (копии скрыты от экранных чтецов); живём в средней части,
   // а уехав в копии, после прокрутки незаметно перескакиваем на такое же место в середине.
   // pos — номер активной миниатюры в ленте 0…3n−1.
   var rail = orig[0] && orig[0].parentNode, tabs = orig.slice(), pos = 0, settle;
+  // На широком экране все миниатюры помещаются в ряд (как у dantistoff) — лента по кругу только на узком
+  var loop = !!rail && n > 1 && window.matchMedia('(max-width: 999px)').matches;
   function copy(t) { var c = t.cloneNode(true); c.setAttribute('aria-hidden', 'true'); c.tabIndex = -1; c.removeAttribute('role'); return c; }
-  if (rail && n > 1) {
+  if (loop) {
     var head = orig.map(copy), tail = orig.map(copy);
     head.forEach(function (c) { rail.insertBefore(c, orig[0]); });
     tail.forEach(function (c) { rail.appendChild(c); });
@@ -523,10 +463,10 @@ document.querySelectorAll('[data-cases]').forEach(function (box) {
     rail.scrollLeft += dx;
     rail.style.scrollSnapType = ''; rail.style.scrollBehavior = '';
   }
-  function home() { if (rail && n > 1) { rail.style.scrollBehavior = 'auto'; rail.scrollLeft = x(tabs[pos]) - 8; rail.style.scrollBehavior = ''; } }
+  function home() { if (loop) { rail.style.scrollBehavior = 'auto'; rail.scrollLeft = x(tabs[pos]) - 8; rail.style.scrollBehavior = ''; } }
   // показать активную и соседей: следующая миниатюра «выезжает», за последней — первая
   function reveal() {
-    if (!rail || n < 2) return;
+    if (!loop) return;
     var a = tabs[pos - 1], z = tabs[pos + 1];
     var l = x(a), r = x(z) + z.offsetWidth, to = rail.scrollLeft;
     if (l < to) to = l; else if (r > to + rail.clientWidth) to = r - rail.clientWidth;
@@ -540,12 +480,15 @@ document.querySelectorAll('[data-cases]').forEach(function (box) {
   function show(k, el) {
     cur = (k + n) % n;
     panes.forEach(function (p, i) { p.hidden = i !== cur; });
+    var sh = panes[cur].querySelector('[data-shots]'); if (sh && sh._go) sh._go(0); // открытый кейс — с фото результата
     tabs.forEach(function (t) { var on = +t.dataset.caseTab === cur; t.classList.toggle('is-on', on); if (t.getAttribute('role')) t.setAttribute('aria-selected', on ? 'true' : 'false'); });
     if (el) pos = tabs.indexOf(el);
     if (num) num.textContent = cur + 1;
+    dots.forEach(function (d, i) { d.classList.toggle('is-on', i === cur); }); // полоска-индикатор (телефон)
     reveal();
   }
   tabs.forEach(function (t) { t.addEventListener('click', function () { show(+t.dataset.caseTab, t); }); });
+  dots.forEach(function (d) { d.addEventListener('click', function () { var k = +d.dataset.caseDot; pos = loop ? n + k : k; show(k); }); });
   var prev = box.querySelector('[data-case-prev]'), next = box.querySelector('[data-case-next]');
   if (prev) prev.addEventListener('click', function () { pos = Math.max(1, pos - 1); show(cur - 1); });
   if (next) next.addEventListener('click', function () { pos = Math.min(tabs.length - 2, pos + 1); show(cur + 1); });
@@ -600,3 +543,28 @@ document.querySelectorAll('[data-cases]').forEach(function (box) {
   var txt = t.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   document.querySelectorAll('[data-tomorrow]').forEach(function (el) { el.textContent = txt; });
 })();
+
+
+/* --- снимки внутри кейса (blocks/CaseStories.astro, [data-shots]): большой кадр показывает один снимок
+   из [data-shot-i]; миниатюры в углу [data-shot], стрелки [data-shot-prev/next] — по кругу.
+   Порядок снимков задан в разметке: результат → до → этапы → результат --- */
+document.querySelectorAll('[data-shots]').forEach(function (box) {
+  var shots = box.querySelectorAll('[data-shot-i]'), minis = box.querySelectorAll('[data-shot]'), cur = 0;
+  var rail = minis[0] && minis[0].parentNode;
+  function go(n) {
+    cur = (n + shots.length) % shots.length;
+    shots.forEach(function (s, i) { s.classList.toggle('is-on', i === cur); });
+    minis.forEach(function (m, i) { m.classList.toggle('is-on', i === cur); });
+    var m = minis[cur]; // активная миниатюра — в видимую часть ленты (без прокрутки страницы)
+    if (rail && m) {
+      var l = m.offsetLeft - rail.offsetLeft, r = l + m.offsetWidth;
+      if (l < rail.scrollLeft) rail.scrollTo({ left: l - 4, behavior: 'smooth' });
+      else if (r > rail.scrollLeft + rail.clientWidth) rail.scrollTo({ left: r - rail.clientWidth + 4, behavior: 'smooth' });
+    }
+  }
+  box._go = go;
+  minis.forEach(function (m) { m.addEventListener('click', function () { go(+m.dataset.shot); }); });
+  var p = box.querySelector('[data-shot-prev]'), n = box.querySelector('[data-shot-next]');
+  if (p) p.addEventListener('click', function () { go(cur - 1); });
+  if (n) n.addEventListener('click', function () { go(cur + 1); });
+});
