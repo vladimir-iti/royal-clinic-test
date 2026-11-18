@@ -122,16 +122,22 @@ var utm = (function () {
   if (!bar) return;
   var typing = false;
   // «Написать» — плашка с выбором мессенджера над меню
-  var mbtn = bar.querySelector('[data-sb-msg-btn]'), mbox = bar.querySelector('[data-sb-msg]');
-  function msg(open) { if (!mbox) return; mbox.hidden = !open; mbtn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-  if (mbtn) {
-    mbtn.addEventListener('click', function (e) { e.stopPropagation(); msg(mbox.hidden); });
-    document.addEventListener('click', function (e) { if (!mbox.hidden && !mbox.contains(e.target)) msg(false); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') msg(false); });
+  var mbtn = bar.querySelector('[data-sb-msg-btn]'), mbox = document.querySelector('[data-sb-msg]');
+  // панель встаёт на место меню: меню уезжает вниз, панель выезжает; клик мимо / Esc — обратно
+  var open = false;
+  function msg(o) {
+    if (!mbox) return;
+    open = o; mbox.classList.toggle('is-in', o); mbtn.setAttribute('aria-expanded', o ? 'true' : 'false');
+    on();
+  }
+  if (mbtn && mbox) {
+    mbtn.addEventListener('click', function (e) { e.stopPropagation(); msg(true); });
+    document.addEventListener('click', function (e) { if (open && !mbox.contains(e.target)) msg(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && open) msg(false); });
   }
   function on() {
-    bar.classList.toggle('is-in', !typing);
-    if (typing) msg(false);
+    if (typing && open) { open = false; mbox.classList.remove('is-in'); mbtn.setAttribute('aria-expanded', 'false'); }
+    bar.classList.toggle('is-in', !typing && !open);
   }
   window.addEventListener('scroll', on, { passive: true });
   document.addEventListener('focusin', function (e) {
