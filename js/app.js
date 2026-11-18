@@ -109,24 +109,20 @@ var utm = (function () {
   });
 })();
 
-/* --- липкая панель на телефоне: видна всегда; прячется, пока
+/* --- липкая панель на телефоне: видна всегда (над ней — мессенджеры при прокрутке вниз); прячется, пока
    открыта клавиатура (иначе закрывает поле ввода) --- */
 (function () {
   var bar = document.querySelector('[data-stickybar]');
   if (!bar) return;
-  var typing = false;
-  // «Написать» — плашка с выбором мессенджера над меню
-  var mbtn = bar.querySelector('[data-sb-msg-btn]'), mbox = bar.querySelector('[data-sb-msg]');
-  function msg(open) { if (!mbox) return; mbox.hidden = !open; mbtn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-  if (mbtn) {
-    mbtn.addEventListener('click', function (e) { e.stopPropagation(); msg(mbox.hidden); });
-    document.addEventListener('click', function (e) { if (!mbox.hidden && !mbox.contains(e.target)) msg(false); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') msg(false); });
-  }
+  var typing = false, lastY = window.scrollY;
+  // второе меню — мессенджеры: листают вниз — выезжает, вверх — прячется; у самого верха страницы скрыто
   function on() {
-    var show = !typing;
-    bar.classList.toggle('is-in', show);
-    if (!show) msg(false);
+    var y = window.scrollY, d = y - lastY;
+    bar.classList.toggle('is-in', !typing);
+    if (typing || y < 120) bar.classList.remove('is-msg');
+    else if (d > 6) bar.classList.add('is-msg');
+    else if (d < -6) bar.classList.remove('is-msg');
+    if (Math.abs(d) > 6) lastY = y;
   }
   window.addEventListener('scroll', on, { passive: true });
   document.addEventListener('focusin', function (e) {
