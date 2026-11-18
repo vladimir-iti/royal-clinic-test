@@ -96,6 +96,12 @@ var utm = (function () {
   document.addEventListener('click', function (e) { if (!menu.hidden && !hd.contains(e.target)) set(false); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) { set(false); btn.focus(); } });
   menu.addEventListener('click', function (e) { if (e.target.closest('a')) set(false); });
+  // «Меню» в нижней панели на телефоне открывает и закрывает это же меню
+  var bm = document.querySelector('[data-sb-menu]');
+  if (bm) {
+    bm.addEventListener('click', function (e) { e.stopPropagation(); set(menu.hidden); bm.setAttribute('aria-expanded', String(!menu.hidden)); });
+    new MutationObserver(function () { bm.setAttribute('aria-expanded', String(!menu.hidden)); }).observe(menu, { attributes: true, attributeFilter: ['hidden'] });
+  }
 })();
 
 /* --- листалка кейсов: стрелки прокручивают на одну карточку --- */
