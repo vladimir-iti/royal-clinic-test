@@ -109,7 +109,7 @@ var utm = (function () {
   });
 })();
 
-/* --- липкая панель на телефоне: после первого экрана; прячется, пока
+/* --- липкая панель на телефоне: видна всегда; прячется, пока
    открыта клавиатура (иначе закрывает поле ввода) --- */
 (function () {
   var bar = document.querySelector('[data-stickybar]');
@@ -124,7 +124,7 @@ var utm = (function () {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') msg(false); });
   }
   function on() {
-    var show = window.scrollY > 480 && !typing;
+    var show = !typing;
     bar.classList.toggle('is-in', show);
     if (!show) msg(false);
   }
@@ -134,6 +134,20 @@ var utm = (function () {
   });
   document.addEventListener('focusout', function () { typing = false; setTimeout(on, 150); });
   on();
+})();
+
+/* --- «Читать полностью»: свёрнутый текст на телефоне (описание кейса) --- */
+(function () {
+  document.querySelectorAll('[data-more]').forEach(function (box) {
+    var btn = box.querySelector('[data-more-btn]');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var open = box.classList.toggle('is-open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.firstChild.nodeValue = open ? 'Свернуть ' : 'Читать полностью ';
+      if (!open) box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  });
 })();
 
 /* --- срок предложения: последний день текущего месяца. Сайт статический,
